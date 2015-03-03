@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Configuration;
 using System.Linq;
+using CommandLine;
+using CommandLine.Text;
 using StackExchange.Redis;
 
 namespace RedisMigrator
 {
     public class Program
     {
-        static readonly ConfigurationDto ConfigurationDto = new ConfigurationDto();
+        static readonly Configuration Configuration = new Configuration();
 
         static void Main(string[] args)
         {
@@ -62,13 +64,13 @@ namespace RedisMigrator
 
         private static IDatabase GetSourceDatabase()
         {
-            var database = RedisConnectionSource.GetDatabase(ConfigurationDto.SourceRedisDb);
+            var database = RedisConnectionSource.GetDatabase(Configuration.SourceRedisDb);
             return database;
         }
 
         private static IDatabase GetTargetDatabase()
         {
-            var database = RedisConnectionTarget.GetDatabase(ConfigurationDto.TargetRedisDb);
+            var database = RedisConnectionTarget.GetDatabase(Configuration.TargetRedisDb);
             return database;
         }
 
@@ -76,21 +78,25 @@ namespace RedisMigrator
         {
             if (args.Any())
             {
-                ConfigurationDto.SourceRedisHost = args[0];
-                ConfigurationDto.TargetRedisHost = args[1];
-                ConfigurationDto.SourceRedisPort = int.Parse(args[2]);
-                ConfigurationDto.TargetRedisPort = int.Parse(args[3]);
-                ConfigurationDto.SourceRedisDb = int.Parse(args[4]);
-                ConfigurationDto.TargetRedisDb = int.Parse(args[5]);
+                var options = new Options();
+                if (Parser.Default.ParseArguments(args, options))
+                {
+                    Configuration.SourceRedisHost = options.SourceRedisHost;
+                    Configuration.TargetRedisHost = options.TargetRedisHost;
+                    Configuration.SourceRedisPort = options.SourceRedisPort;
+                    Configuration.TargetRedisPort = options.TargetRedisPort;
+                    Configuration.SourceRedisDb = options.SourceRedisDb;
+                    Configuration.TargetRedisDb = options.TargetRedisDb;
+                }
             }
             else
             {
-                ConfigurationDto.SourceRedisHost = ConfigurationManager.AppSettings["SourceRedisHost"];
-                ConfigurationDto.TargetRedisHost = ConfigurationManager.AppSettings["TargetRedisHost"];
-                ConfigurationDto.SourceRedisPort = int.Parse(ConfigurationManager.AppSettings["SourceRedisPort"]);
-                ConfigurationDto.TargetRedisPort = int.Parse(ConfigurationManager.AppSettings["TargetRedisPort"]);
-                ConfigurationDto.SourceRedisDb = int.Parse(ConfigurationManager.AppSettings["SourceRedisDb"]);
-                ConfigurationDto.TargetRedisDb = int.Parse(ConfigurationManager.AppSettings["TargetRedisDb"]);
+                Configuration.SourceRedisHost = ConfigurationManager.AppSettings["SourceRedisHost"];
+                Configuration.TargetRedisHost = ConfigurationManager.AppSettings["TargetRedisHost"];
+                Configuration.SourceRedisPort = int.Parse(ConfigurationManager.AppSettings["SourceRedisPort"]);
+                Configuration.TargetRedisPort = int.Parse(ConfigurationManager.AppSettings["TargetRedisPort"]);
+                Configuration.SourceRedisDb = int.Parse(ConfigurationManager.AppSettings["SourceRedisDb"]);
+                Configuration.TargetRedisDb = int.Parse(ConfigurationManager.AppSettings["TargetRedisDb"]);
             }
         }
 
@@ -106,11 +112,11 @@ namespace RedisMigrator
 
             if (isSource)
             {
-                options.EndPoints.Add(ConfigurationDto.SourceRedisHost, ConfigurationDto.SourceRedisPort);
+                options.EndPoints.Add(Configuration.SourceRedisHost, Configuration.SourceRedisPort);
             }
             else
             {
-                options.EndPoints.Add(ConfigurationDto.TargetRedisHost, ConfigurationDto.TargetRedisPort);
+                options.EndPoints.Add(Configuration.TargetRedisHost, Configuration.TargetRedisPort);
             }
 
             var redisConnection = ConnectionMultiplexer.Connect(options);
@@ -118,7 +124,7 @@ namespace RedisMigrator
         }
     }
 
-    internal class ConfigurationDto
+    internal class Configuration
     {
         public string SourceRedisHost { get; set; }
         public string TargetRedisHost { get; set; }
@@ -128,5 +134,36 @@ namespace RedisMigrator
 
         public int SourceRedisDb { get; set; }
         public int TargetRedisDb { get; set; }
+    }
+
+    class Options
+    {
+        [Option('s', "source", Required = true, HelpText = "Source Redis Host")]
+        public string SourceRedisHost { get; set; }
+
+        [Option('t', "target", Required = true, HelpText = "Target Redis Host")]
+        public string TargetRedisHost { get; set; }
+
+        [Option("sp", HelpText = "Source Redis Port", DefaultValue = 6379)]
+        public int SourceRedisPort { get; set; }
+
+        [Option("tp", HelpText = "Target Redis Port", DefaultValue = 6379)]
+        public int TargetRedisPort { get; set; }
+
+        [Option("sd", HelpText = "Source Redis Db Id")]
+        public int SourceRedisDb { get; set; }
+
+        [Option("td", HelpText = "Target Redis Db Id")]
+        public int TargetRedisDb { get; set; }
+
+        [ParserState]
+        public IParserState LastParserState { get; set; }
+
+        [HelpOption]
+        public string GetUsage()
+        {
+            return HelpText.AutoBuild(this,
+              (HelpText current) => HelpText.DefaultParsingErrorsHandler(this, current));
+        }
     }
 }
